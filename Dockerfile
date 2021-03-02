@@ -1,5 +1,5 @@
 FROM centos:7
-RUN yum install nginx -y
-RUN service nginx start
-COPY file.txt /var/www/html
+RUN yum install httpd -y
+RUN service httpd start
+COPY index.html /var/www/html/
 
