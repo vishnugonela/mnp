@@ -1,0 +1,140 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+{{- if .Values.service.name }}
+  name: "{{ .Values.service.name }}"
+{{- else }}
+  name: "svc-{{ .Chart.Name }}"
+{{- end }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Values.app.name }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+spec:
+{{- if .Values.service.name }}
+  serviceName: "{{ .Values.service.name }}"
+{{- else }}
+  serviceName: "svc-{{ .Chart.Name }}"
+{{- end }}
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.app.name }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.app.name }}
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: {{ .Values.container.name | quote }}
+        image: "{{ .Values.container.image }}:{{ .Values.container.imageTag }}"
+        imagePullPolicy: {{ .Values.container.imagePullPolicy | quote }}
+        resources:
+{{ toYaml .Values.container.resources | indent 10 }}
+        env:
+        - name: MYSQL_ALLOW_EMPTY_PASSWORD
+          value: "no"
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.db.credentials.secretName }}
+              key: mysql-root-password
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.db.credentials.secretName }}
+              key: mysql-password
+        - name: MYSQL_USER
+          value: {{ .Values.db.credentials.userName }}
+        {{- if .Values.db.startupDB }}
+        - name: MYSQL_DATABASE
+          value: {{ .Values.db.startupDB }}
+        {{- end }}
+        {{- if .Values.db.extraEnvVars }}
+{{ tpl .Values.db.extraEnvVars . | indent 8 }}
+        {{- end }}
+        ports:
+        - name: {{ .Values.service.portName | default "mysql" | quote }}
+          containerPort: {{ .Values.service.port | default "3306" }}
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - "mysqladmin ping -u root -p${MYSQL_ROOT_PASSWORD}"
+          initialDelaySeconds: {{ .Values.container.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.container.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.container.livenessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.container.livenessProbe.successThreshold }}
+          failureThreshold: {{ .Values.container.livenessProbe.failureThreshold }}
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - "mysqladmin ping -u root -p${MYSQL_ROOT_PASSWORD}"
+          initialDelaySeconds: {{ .Values.container.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.container.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.container.readinessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.container.readinessProbe.successThreshold }}
+          failureThreshold: {{ .Values.container.readinessProbe.failureThreshold }}
+        volumeMounts:
+        - name: {{ .Values.persistence.name }}
+          {{- if .Values.persistence.volume.dataSubPath }}
+          subPath: {{ .Values.persistence.volume.dataSubPath }}
+          {{- end }}
+          mountPath: /var/lib/mysql
+
+      {{- if .Values.persistence.backupVolumeClaim }}
+        - name: backups
+          mountPath: /mnt/backups
+      {{- end }}
+
+        {{- if .Values.db.confFile }}
+        - name: conf
+          subPath: "my.cnf"
+          mountPath: /etc/my.cnf
+        {{- else if .Values.persistence.volume.confSubPath }}
+        - name: {{ .Values.persistence.name }}
+          subPath: {{ .Values.persistence.volume.confSubPath }}
+          mountPath: /etc/my.cnf
+        {{- end }}
+        {{- if .Values.db.initFilesConfigMap }}
+        - name: initd
+          mountPath: /docker-entrypoint-initdb.d
+        {{- else if .Values.persistence.volume.initSubPath }}
+        - name: {{ .Values.persistence.name }}
+          subPath: {{ .Values.persistence.volume.initSubPath }}
+          mountPath: /docker-entrypoint-initdb.d
+        {{- end }}
+      volumes:
+      - name: {{ .Values.persistence.name }}
+      {{- if .Values.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ .Values.persistence.volumeClaim.name }}
+      {{- else }}
+        emptyDir: {}
+      {{- end }}
+      {{- if .Values.db.confFile }}
+      - name: conf
+        configMap:
+          name: "cnf-{{ .Chart.Name }}"
+      {{- end }}
+      {{- if .Values.db.initFilesConfigMap }}
+      - name: initd
+        configMap:
+          name: {{ .Values.db.initFilesConfigMap | quote }}
+      {{- end }}
+      {{- if .Values.persistence.backupVolumeClaim }}
+      - name: backups
+        {{- if .Values.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ .Values.persistence.backupVolumeClaim }}
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+      {{- end }}
+      #nodeName: iumdevvm32

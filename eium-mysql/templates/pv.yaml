@@ -1,0 +1,28 @@
+{{- if and  (.Values.persistence.enabled) (.Values.persistence.volume.create) }}
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: "{{ .Values.persistence.volume.name }}"
+  namespace: {{ .Release.Namespace }}
+  labels:
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    app: {{ .Values.app.name }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.accessMode | quote }}
+  capacity:
+    storage: {{ .Values.persistence.volume.capacity }}
+{{- if .Values.persistence.storageClass }}
+  storageClassName: {{ .Values.persistence.storageClass | quote }}
+{{- else }}
+  storageClassName: ""
+{{- end }}
+{{- if .Values.persistence.reclaimPolicy }}
+  persistentVolumeReclaimPolicy: {{ .Values.persistence.reclaimPolicy | quote }}
+{{- else }}
+  persistentVolumeReclaimPolicy: "Retain"
+{{- end }}
+{{ toYaml .Values.persistence.volume.type | indent 2 }}
+#do we need claim reference
+{{- end }}

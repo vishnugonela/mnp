@@ -1,0 +1,196 @@
+###eIUM mysql chart values #####
+### WARNING please edit with care as this is a yaml file ####
+
+#This chart creates a single node MySQL stateful database server on a Kubernetes cluster
+
+
+#Application name that is used across different objects
+app:
+  name: eium-mysql-app
+
+#Database related parameters
+db:
+  # This variable is optional and allows you to specify the name of a database to be created on container startup
+  startupDB: siudb
+  credentials:
+    #Allow chart to create Secrets if enabled
+    configureSecret: true
+    #Name of the Secret
+    secretName: eium-mysql-secret
+    #Use "base64" or "plain" if it is of base64 then no conversion to base64 happens during template execution
+    passwordEncoding: plain
+    #This variable is mandatory and specifies the password that will be set for the MySQL root superuser account. 
+    rootPassword: secret
+    #This variables is mandatory and specifies the database user name
+    userName: siu20
+    #This variable is mandatory and specifies the database user password
+    userPassword: siu20
+
+  # A way to add extra environment variables
+  #extraEnvVars: null
+  extraEnvVars: |
+    - name: MYSQL_LOG_CONSOLE
+      value: 'true'
+    - name: MYSQL_ROOT_HOST
+      value: '%'
+
+  #ConfigMap name for the data base initialization files
+  #eg: initFilesConfigMap: mysql-init-files
+  initFilesConfigMap: null
+  #Optional custom mysql configuration files used to override default mysql settings
+  confFile: 
+    my.cnf: |
+       [mysqld] 
+       server-id=1
+       auto-increment-offset=1
+    script.sh: |-
+       #!/bin/sh
+       set -x
+       host="localhost"
+       file_log=`mysql -h $host -uroot -psiu20 -P 3306 --protocol=TCP -e "show master status;" 2>/dev/null | grep master-log | awk '{ print $1 }'` && echo $file_log > file_log.out
+       file_position=`mysql -h $host -uroot -psiu20 -P 3306 --protocol=TCP -e "show master status;" 2>/dev/null | grep master-log | awk '{ print $2 }'` && echo $file_position > file_position.out 
+       # Mysql Command to create replica, use $1 for host(db-host2 OR db-host1)
+       mysql -h $host -uroot -psiu20 -P 3306 --protocol=TCP -e "GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'slave'@'$1' IDENTIFIED BY 'slave'; flush privileges;change master to master_host='$1',master_port=3306,master_user='slave',master_password='slave',master_log_file='$file_log',master_log_pos=$file_position ;start slave;" 2>/dev/null
+       #
+#      [client]
+#      port=3306
+#  
+#      [mysqld]
+#      port=3306
+#      key_buffer_size = 16M
+#      max_allowed_packet = 64M
+#      table_open_cache = 64
+#      sort_buffer_size = 512K
+#      net_buffer_length = 8K
+#      read_buffer_size = 256K
+#      read_rnd_buffer_size = 512K
+#      myisam_sort_buffer_size = 8M
+#      default-storage-engine=InnoDB
+#      lower_case_table_names=1
+#      user=mysql
+#  
+#      default-time-zone='+00:00'
+#      server-id       = 1
+#      wait_timeout=2073600
+#      innodb_data_file_path = ibdata1:10M:autoextend
+#      innodb_buffer_pool_size = 48M
+#      innodb_log_file_size = 16M
+#      innodb_log_buffer_size = 8M
+#      innodb_flush_log_at_trx_commit = 1
+#      innodb_lock_wait_timeout = 50
+#  
+#      [mysqldump]
+#      quick
+#      max_allowed_packet = 16M
+#  
+#      [mysql]
+#      no-auto-rehash
+#  
+#      [myisamchk]
+#      key_buffer_size = 20M
+#      sort_buffer_size = 20M
+#      read_buffer = 2M
+#      write_buffer = 2M
+#  
+#      [mysqlhotcopy]
+#      interactive-timeout
+
+#Kubernetes service details
+service:
+  #Service name that need to be used by external clients for accessing database
+  name: eium-mysql-dbsvc
+  #Name of the port
+  portName: mysql
+  #Service port,this should match with my.cnf configuration
+  port: 3306
+
+#Persistence group
+persistence:
+  #Set to true if you want to create PV or PVC
+  enabled: true
+  #Name to be use in volume and volume mounts
+  name: eium-mysql-mount
+  #accessMode
+  accessMode: ReadWriteOnce
+  #storageClass
+  storageClass: standard
+  #reclaimPolicy
+  reclaimPolicy: Retain
+
+  volume:
+    # Create PersistentVolume if true
+    create: true
+    #Name of the PersistentVolume
+    name: "eium-mysql-volume"
+    #Capacity of the PersistentVolume
+    capacity: 2Gi
+    # The subPath(sub-directory) under which mysql data is stored eg. if /var/opt/mysql is your root path then it will use /var/opt/mysql/data as data dir
+    dataSubPath: data
+    #The subPath(relative location from the mount point) under which mysql conf file is stored. This should be a file name
+    confSubPath: conf/my.cnf
+    # The subPath(sub-directory) under which mysql db initialization files are stored
+    initSubPath: scripts
+    type:
+      #PersistentVolume type - This subsection is copied to PersistentVolume's type section
+      nfs:
+        path: /data/nfs/mysql_master
+        server: 15.213.50.196
+        readOnly: false
+  volumeClaim:
+    #Create PersistentVolumeClaim if true
+    create: true
+    #PersistentVolumeClaim name
+    name: "eium-mysql-claim"
+    #PersistentVolumeClaim claim capacity
+    capacity: 1Gi
+    volumeSelector: null
+#      selector:
+#        matchLabels:
+#         app: eium-mysql-app
+
+  #mount additional backup volume
+  #backupVolumeClaim: mysql-pvc-backup 
+
+#container related configuration
+container:
+  #name of the container
+  name: eium-mysql-container
+  #image name - fully qualified without tag
+  #image: "localhost:5000/mysql/enterprise-server"
+  image: "mysql/enterprise-server"
+  #image tag
+  imageTag: "8.0"
+  #imagePullPolicy
+  imagePullPolicy: IfNotPresent
+  #resources for the container, this subsection is copied to the spec section of container
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 4096Mi
+    requests:
+      cpu: 1000m
+      memory: 1024Mi
+
+  livenessProbe:
+    #Delay before liveness probe is initiated
+    initialDelaySeconds: 1
+    #How often to perform the probe
+    periodSeconds: 10
+    #When the probe times out
+    timeoutSeconds: 5
+    #Minimum consecutive successes for the probe to be considered successful after having failed.
+    successThreshold: 1
+    #Minimum consecutive failures for the probe to be considered failed after having succeeded.
+    failureThreshold: 10
+
+  readinessProbe:
+    #Delay before readiness probe is initiated
+    initialDelaySeconds: 2
+    #How often to perform the probe
+    periodSeconds: 10
+    #When the probe times out
+    timeoutSeconds: 1
+    #Minimum consecutive successes for the probe to be considered successful after having failed.
+    successThreshold: 1
+    #Minimum consecutive failures for the probe to be considered failed after having succeeded.
+    failureThreshold: 10  

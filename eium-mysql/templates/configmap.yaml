@@ -1,0 +1,12 @@
+{{- if .Values.db.confFile }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "cnf-{{ .Chart.Name }}"
+  namespace: {{ .Release.Namespace }}
+data:
+  my.cnf: |- 
+{{index .Values.db.confFile "my.cnf" |indent 4}}
+  script.sh: |-
+{{index .Values.db.confFile "script.sh" |indent 4}}
+{{- end }}

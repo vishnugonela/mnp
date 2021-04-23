@@ -1,0 +1,13 @@
+apiVersion: v1
+appVersion: mysql-enterprise-server-8.0.16
+description: A Helm chart to create a single node MySQL stateful database server on
+  a Kubernetes cluster.
+home: http://www.hpe.com
+keywords:
+- mysql
+- eium
+maintainers:
+- name: eIUM R&D
+  url: http://www.hpe.com
+name: eium-mysql
+version: "1.0"

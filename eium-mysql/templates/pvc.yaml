@@ -1,0 +1,25 @@
+{{- if and  (.Values.persistence.enabled) (.Values.persistence.volumeClaim.create) }}
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: "{{ .Values.persistence.volumeClaim.name }}"
+  namespace: {{ .Release.Namespace }}
+  labels:
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+spec:
+  accessModes:
+    - {{ .Values.persistence.accessMode | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.volumeClaim.capacity }}
+{{- if .Values.persistence.storageClass }}
+  storageClassName: {{ .Values.persistence.storageClass | quote }}
+{{- else }}
+  storageClassName: ""
+{{- end }}
+{{- if .Values.persistence.volumeClaim.volumeSelector }}
+{{ toYaml .Values.persistence.volumeClaim.volumeSelector| indent 2 }}
+{{- end }}
+#do we need to reserve/bind volume by adding volumeName?
+{{- end }}
